@@ -1,12 +1,18 @@
-#include <vector>
+#include <sstream>
 #include <iostream>
-#include <random>
-#include <time.h>
 #include <fstream>
+
+#include <random>
 #include <algorithm>
+#include <typeinfo>
+
+#include <time.h>
 #include <queue>
 #include <set>
-#include <typeinfo>
+#include <tuple>
+#include <string>
+#include <vector>
+#include <iterator>
 // #include "Tile.h"
 // #include "Functions.h"
 
@@ -235,10 +241,104 @@ void Tile::print()
 //
 enum Direction
 {
-    North = 1,
-    East = 2,
-    South = 3,
-    West = 4
+    North = 0,
+    East = 1,
+    South = 2,
+    West = 3
+};
+
+std::ostream &operator<<(std::ostream &os, Direction d)
+{
+    switch (d)
+    {
+    case 0:
+        os << "North";
+        break;
+    case 1:
+        os << "East";
+        break;
+    case 2:
+        os << "South";
+        break;
+    case 3:
+        os << "West";
+        break;
+    }
+    return os;
+}
+
+//
+class Rules : public std::vector<std::tuple<std::set<int>, std::set<int>, std::set<int>, std::set<int>>>
+{
+private:
+    unsigned int diversity;
+    unsigned int dimension;
+
+public:
+    //
+    Rules(){};
+
+    //
+    Rules(unsigned int Diversity, unsigned int Dimension)
+    {
+        diversity = Diversity;
+        dimension = Dimension;
+    }
+
+    //
+    unsigned int getDiversity() { return diversity; }
+
+    //
+    void fillRules(std::istream &in)
+    {
+        std::string buff;
+
+        std::cout << "Enter the number of different tiles: \n";
+
+        std::getline(in, buff);
+        std::istringstream div(buff);
+        diversity = *(std::istream_iterator<int>(div));
+        (*this).resize(diversity);
+
+        for (unsigned int i = 0; i < diversity; i++)
+        {
+            std::cout << "Enter tile numbers that can be attached with " << i << "th tile:\n";
+            for (unsigned int j = 0; j < 4; j++)
+            {
+                std::cout << "\twith " << (Direction)j << " side: \n";
+
+                std::getline(in, buff);
+                std::istringstream is(buff);
+
+                if (j == 0)
+                    std::copy(std::istream_iterator<int>(is), std::istream_iterator<int>(), inserter(std::get<North>((*this)[i]), std::get<North>((*this)[i]).begin()));
+                else if (j == 1)
+                    std::copy(std::istream_iterator<int>(is), std::istream_iterator<int>(), inserter(std::get<East>((*this)[i]), std::get<East>((*this)[i]).begin()));
+                else if (j == 2)
+                    std::copy(std::istream_iterator<int>(is), std::istream_iterator<int>(), inserter(std::get<South>((*this)[i]), std::get<South>((*this)[i]).begin()));
+                else if (j == 3)
+                    std::copy(std::istream_iterator<int>(is), std::istream_iterator<int>(), inserter(std::get<West>((*this)[i]), std::get<West>((*this)[i]).begin()));
+            }
+        }
+    }
+
+    //
+    void printRules()
+    {
+        for (unsigned int i = 0; i < (*this).size(); i++)
+        {
+            std::cout << "Rules for " << i << "th tile: \n";
+
+            std::cout << "\tfor North side:\t";
+            Print(std::get<North>((*this)[i]));
+            std::cout << "\tfor East side:\t";
+            Print(std::get<East>((*this)[i]));
+            std::cout << "\tfor South side:\t";
+            Print(std::get<South>((*this)[i]));
+            std::cout << "\tfor West side:\t";
+            Print(std::get<West>((*this)[i]));
+        }
+    }
 };
 
 //
@@ -249,7 +349,7 @@ private:
     // TODO: std::vector<int> size_of_space; // Размеры пространсва. Вектор на случай многомерных пространств.
     std::set<int> collapsed_positions; // Множество уже сколлапсированных тайлов.
     // std::vector<std::set<int>> rules;  // Вектор множеств возможных тайлов.
-    std::vector<std::pair<Direction, std::vector<int>>> rules;// Вектор правил соединений тайлов. 
+    Rules rules; // Вектор правил соединений тайлов.
     // Содержит пару Direction (направление) и вектор возмодных соединений (вектор номеров тайлов)
     // TODO: unsigned int dimetion; // Размерность пространства.
     int size;        // Размер грани chunk.
@@ -258,7 +358,7 @@ private:
     // TODO: unsigned int smooth_coef; // Количество применений к chunk сглаживающей функции.
 
     // Возвращает множество возможных соседних тайлов для данной позиции.
-    std::set<int> PossibleNearbyTiles(int position)
+    std::set<int> PossibleNearbyTiles(int position, Direction dir)
     {
         std::set<int> possible_tiles;
         std::set<int> temp;
@@ -266,13 +366,21 @@ private:
         for (std::set<int>::iterator it = wave[position].begin(); it != wave[position].end(); it++)
         {
             temp = possible_tiles;
-            std::set_union(rules[*it].begin(), rules[*it].end(), temp.begin(), temp.end(), inserter(possible_tiles, possible_tiles.begin()));
+            if (dir == North)
+                std::set_union(std::get<North>(rules[*it]).begin(), std::get<North>(rules[*it]).end(), temp.begin(), temp.end(), inserter(possible_tiles, possible_tiles.begin()));
+            else if (dir == East)
+                std::set_union(std::get<East>(rules[*it]).begin(), std::get<East>(rules[*it]).end(), temp.begin(), temp.end(), inserter(possible_tiles, possible_tiles.begin()));
+            else if (dir == South)
+                std::set_union(std::get<South>(rules[*it]).begin(), std::get<South>(rules[*it]).end(), temp.begin(), temp.end(), inserter(possible_tiles, possible_tiles.begin()));
+            else if (dir == West)
+                std::set_union(std::get<West>(rules[*it]).begin(), std::get<West>(rules[*it]).end(), temp.begin(), temp.end(), inserter(possible_tiles, possible_tiles.begin()));
         }
 
         return possible_tiles;
     }
 
     // Проверяет на возможностть коллапсирования цели в данной позиции.
+    /*
     bool Possible(int collapse_target, int position)
     {
         if (In(rules[position + 1], collapse_target) &&
@@ -287,6 +395,7 @@ private:
             return false;
         }
     }
+    */
 
     // Мера неопределенности данной позиции. TODO: сделать исключение.
     int Entropy(int position)
@@ -418,20 +527,30 @@ private:
                 }
             }
 
-            std::set<int> possible_tiles = PossibleNearbyTiles(temp_position);
-
-            if (possible_tiles.size() == diversity)
+            for (int direction = 0; direction < 4; direction++)
             {
-                continue;
-            }
+                int nearby_position;
+                if (direction == 0)
+                    nearby_position = temp_position - size;
+                else if (direction == 1)
+                    nearby_position = temp_position + 1;
+                else if (direction == 2)
+                    nearby_position = temp_position + size;
+                else if (direction == 3)
+                    nearby_position = temp_position - 1;
 
-            for (int nearby_position = -size + temp_position; nearby_position <= size + temp_position;)
-            {
+                std::set<int> possible_tiles = PossibleNearbyTiles(temp_position, (Direction)direction);
+
+                if (possible_tiles.size() == diversity)
+                {
+                    continue;
+                }
+
                 if ((nearby_position >= 0) && (nearby_position <= linear_size))
                 {
                     for (int j = 0; j < diversity; j++)
                     {
-                        if (!In(possible_tiles, j) && (collapsed_positions.find(nearby_position) == collapsed_positions.end()))
+                        if ((possible_tiles.find(j) == possible_tiles.end()) && (collapsed_positions.find(nearby_position) == collapsed_positions.end()))
                         {
                             try
                             {
@@ -444,10 +563,6 @@ private:
                         }
                     }
                 }
-                if (nearby_position == -1 + temp_position)
-                    nearby_position += 2;
-                else
-                    nearby_position += size - 1;
             }
         }
     }
@@ -456,24 +571,27 @@ private:
     void WFC()
     {
         srand(time(NULL));
-        int position = -1;
+        int position = rand() % linear_size;
         int c = 0;
         while (collapsed_positions.size() != linear_size)
         {
-            try
+            if (c != 0)
             {
-                position = Observation();
-                c++;
-            }
-            catch (std::invalid_argument e)
-            {
-                std::cout << e.what() << "\n";
-                break;
+                try
+                {
+                    position = Observation();
+                }
+                catch (std::invalid_argument e)
+                {
+                    std::cout << e.what() << "\n";
+                    break;
+                }
             }
 
             try
             {
                 Distribution(position);
+                c++;
             }
             catch (std::invalid_argument e)
             {
@@ -481,16 +599,25 @@ private:
                 return;
             }
         }
-        std::cout << "Iteration: " << c << std::endl;
+        std::cout << "Iterations: " << c << std::endl;
     }
 
 public:
-    Chunk(std::vector<std::set<int>> Rules, int Diversity, int Size = 2)
+    Chunk(Rules &Rules, int Size = 2)
     {
         rules = Rules;
-        diversity = Diversity;
+        diversity = Rules.getDiversity();
         size = Size;
         linear_size = size * size;
+        InitWave();
+    }
+
+    Chunk(const Chunk &c)
+    {
+        rules = c.rules;
+        diversity = c.diversity;
+        size = c.size;
+        linear_size = c.linear_size;
         InitWave();
     }
 
@@ -498,30 +625,6 @@ public:
     {
         WFC();
     }
-
-    // TODO: надо придумать как генерировать присоединенные chunks.
-    /*
-    void GenerateJoinedChunk(Chunk &c, Direction dir = North)
-    {
-
-        // North : position < size
-        // East : position % size == size - 1
-        // South : position >= linear_size - size
-        // West : position % size == 0
-
-
-        if (dir == North)
-        {
-            for (int position = 0; position < size; position++)
-            {
-                wave[position] = c.wave[position];
-            }
-        }
-        else if (dir == East)
-        {
-        }
-    }
-    */
 
     void PrintChunk()
     {
@@ -579,50 +682,109 @@ public:
 class Map
 {
 private:
-    std::vector<std::vector<Tile>> map;
+    std::vector<std::vector<Chunk>> matrix_of_chunks;
 
 public:
-    Map() {}
-    Map(const Map &m) { map = m.map; }
+    Map(Rules &rules, unsigned int size_of_map, unsigned int dimension_of_map = 2)
+    {
+        matrix_of_chunks.resize(size_of_map);
+        for (int i = 0; i < size_of_map; i++)
+        {
+            Chunk c(rules, 10);
+            matrix_of_chunks[i].push_back(c);
+        }
+    }
 };
 
 int main()
 {
 
-    std::vector<std::set<int>> rules;
+    // North = 0 : position < size
+    // East = 1: position % size == size - 1
+    // South = 2: position >= linear_size - size
+    // West = 3: position % size == 0
+    int size = 15;
+    // std::cin >> size;
 
-    int size, diversity = 6;
-    std::cin >> size;
+    // std::vector<std::tuple<std::set<int>, std::set<int>, std::set<int>, std::set<int>>> rules;
+    Rules rules;
+    rules.fillRules(std::cin);
+    rules.printRules();
 
-    rules.resize(diversity);
-    srand(time(NULL));
-
-    rules[0].insert(0);
-    rules[1].insert(1);
-    rules[2].insert(2);
-    rules[3].insert(3);
-    rules[4].insert(4);
-    rules[5].insert(5);
-
-    rules[0].insert(1);
-    rules[1].insert(0);
-
-    rules[2].insert(1);
-    rules[1].insert(2);
-
-    rules[2].insert(3);
-    rules[3].insert(2);
-
-    rules[4].insert(3);
-    rules[3].insert(4);
-
-    rules[4].insert(5);
-    rules[5].insert(4);
-
-    Chunk c(rules, diversity, size);
-
-    c.GenerateChunk();
+    Chunk c(rules, 10);
+    
+    try
+    {
+        c.GenerateChunk();
+    }
+    catch (const std::exception &e)
+    {
+        std::cout << e.what() << std::endl;
+    }
     // c.PrintChunk();
     c.SaveChunk();
     system("python show.py");
+
+    /*
+    rules.resize(diversity);
+
+    std::get<North>(rules[0]).insert(0);
+    std::get<East>(rules[0]).insert(0);
+    std::get<South>(rules[0]).insert(0);
+    std::get<West>(rules[0]).insert(0);
+
+    std::get<North>(rules[1]).insert(1);
+    std::get<East>(rules[1]).insert(1);
+    std::get<South>(rules[1]).insert(1);
+    std::get<West>(rules[1]).insert(1);
+
+    std::get<North>(rules[2]).insert(2);
+    std::get<East>(rules[2]).insert(2);
+    std::get<South>(rules[2]).insert(2);
+    std::get<West>(rules[2]).insert(2);
+
+    std::get<North>(rules[3]).insert(3);
+    std::get<East>(rules[3]).insert(3);
+    std::get<South>(rules[3]).insert(3);
+    std::get<West>(rules[3]).insert(3);
+
+    std::get<North>(rules[4]).insert(4);
+    std::get<East>(rules[4]).insert(4);
+    std::get<South>(rules[4]).insert(4);
+    std::get<West>(rules[4]).insert(4);
+
+    std::get<North>(rules[5]).insert(5);
+    std::get<East>(rules[5]).insert(5);
+    std::get<South>(rules[5]).insert(5);
+    std::get<West>(rules[5]).insert(5);
+
+    std::get<South>(rules[1]).insert(0);
+    std::get<North>(rules[0]).insert(1);
+
+    std::get<North>(rules[1]).insert(2);
+    std::get<East>(rules[1]).insert(2);
+    std::get<West>(rules[1]).insert(2);
+    std::get<South>(rules[2]).insert(1);
+    std::get<East>(rules[2]).insert(1);
+    std::get<West>(rules[2]).insert(1);
+
+    std::get<North>(rules[2]).insert(3);
+    std::get<East>(rules[2]).insert(3);
+    std::get<South>(rules[2]).insert(3);
+    std::get<West>(rules[2]).insert(3);
+    std::get<North>(rules[3]).insert(2);
+    std::get<East>(rules[3]).insert(2);
+    std::get<South>(rules[3]).insert(2);
+    std::get<West>(rules[3]).insert(2);
+
+    std::get<North>(rules[3]).insert(4);
+    std::get<East>(rules[3]).insert(4);
+    std::get<West>(rules[3]).insert(4);
+    std::get<East>(rules[4]).insert(3);
+    std::get<South>(rules[4]).insert(3);
+    std::get<West>(rules[4]).insert(3);
+
+    std::get<North>(rules[4]).insert(5);
+    std::get<South>(rules[5]).insert(4);
+    */
 }
